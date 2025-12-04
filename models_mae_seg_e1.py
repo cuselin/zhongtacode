@@ -74,7 +74,7 @@ class MAEGroupChannelsSegE1(nn.Module):
         loaded_keys = [k for k in filtered.keys() if k in mae_sd]
         print(f"[E1] Loaded keys count: {len(loaded_keys)} / {len(mae_sd)}")
 
-    def set_freeze_policy(self):
+    def set_freeze_policy_freezedecoder(self):
         # 默认全部冻结
         for p in self.mae.parameters():
             p.requires_grad = False
@@ -103,6 +103,51 @@ class MAEGroupChannelsSegE1(nn.Module):
             self.mae.channel_embed, self.mae.blocks, self.mae.norm,
             self.mae.decoder_embed, self.mae.mask_token, self.mae.decoder_pos_embed,
             self.mae.decoder_channel_embed, self.mae.decoder_blocks, self.mae.decoder_norm,
+            # self.mae.proj_up_conv, self.mae.proj_up_norm, self.mae.up_block1, self.mae.up_block2,
+        ]
+        for m in modules_to_freeze:
+            if isinstance(m, nn.Module):
+                for p in m.parameters():
+                    p.requires_grad = False
+
+        # 打印参数计数
+        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        frozen = sum(p.numel() for p in self.parameters() if not p.requires_grad)
+        total = trainable + frozen
+        print(f"[E1] Params total={total:,}, trainable={trainable:,}, frozen={frozen:,}")
+        print("[E1] Trainable modules: decoder_pred + proj_up_conv/norm + up_block1/2 + seg_head")
+
+    def set_freeze_policy_unfreezedecoder(self):
+        # 默认全部冻结
+        for p in self.mae.parameters():
+            p.requires_grad = False
+
+        # 解冻 decoder 的关键部分：decoder_pred + 上采样卷积结构（proj_up_* + up_block1, up_block2）
+        for m in [
+            self.mae.proj_up_conv,
+            self.mae.proj_up_norm,
+            self.mae.up_block1,
+            self.mae.up_block2,
+            self.mae.decoder_embed, self.mae.decoder_pos_embed,
+            self.mae.decoder_channel_embed, self.mae.decoder_blocks, self.mae.decoder_norm,
+        ]:
+            for p in m.parameters():
+                p.requires_grad = True
+
+        for head in self.mae.decoder_pred:
+            for p in head.parameters():
+                p.requires_grad = True
+
+        # 分割适配头需要训练
+        for p in self.seg_head.parameters():
+            p.requires_grad = True
+
+        # 显式保持以下模块冻结
+        modules_to_freeze = [
+            self.mae.patch_embed, self.mae.cls_token, self.mae.pos_embed,
+            self.mae.channel_embed, self.mae.blocks, self.mae.norm, self.mae.mask_token,
+            # self.mae.decoder_embed, self.mae.decoder_pos_embed,
+            # self.mae.decoder_channel_embed, self.mae.decoder_blocks, self.mae.decoder_norm,
             # self.mae.proj_up_conv, self.mae.proj_up_norm, self.mae.up_block1, self.mae.up_block2,
         ]
         for m in modules_to_freeze:

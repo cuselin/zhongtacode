@@ -41,6 +41,8 @@ def get_args_parser():
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
     parser.add_argument('--log_dir', default='./segmentation_logs_e1', type=str)
     parser.add_argument('--output_dir', default='./segmentation_logs_e1', type=str)
+    parser.add_argument('--freeze_decoder', action='store_true', default=False, help='Freeze decoder parameters')
+
     return parser
 
 def build_datasets(args):
@@ -112,7 +114,12 @@ def main(args):
         mae_model_size=args.mae_model_size
     )
     model.load_from_mae_checkpoint(args.pretrained_ckpt)
-    model.set_freeze_policy()
+    # freeze Decoder 或 Unfreeze Decoder
+    if args.freeze_decoder:
+        model.set_freeze_policy_freezedecoder()
+    else:
+        model.set_freeze_policy_unfreezedecoder()
+
     model.to(device)
 
     # DDP 包裹
