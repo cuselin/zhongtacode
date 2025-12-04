@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import argparse
 import os
 import time
